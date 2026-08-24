@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
@@ -103,38 +104,18 @@
             return canvas.toDataURL('image/jpeg', 0.5);
         };
 
-        // 自訂 hook：處理 localStorage 資料同步
-        function useLocalStorage(key, initialValue) {
-            const [storedValue, setStoredValue] = useState(() => {
-                try {
-                    const item = window.localStorage.getItem(key);
-                    return item ? JSON.parse(item) : initialValue;
-                } catch (error) {
-                    console.log(error);
-                    return initialValue;
-                }
-            });
-            const setValue = (value) => {
-                try {
-                    const valueToStore = value instanceof Function ? value(storedValue) : value;
-                    setStoredValue(valueToStore);
-                    window.localStorage.setItem(key, JSON.stringify(valueToStore));
-                } catch (error) { console.log(error); }
-            };
-            return [storedValue, setValue];
-        }
-
         function App() {
-            // 資料狀態 (儲存於 LocalStorage)
-            const [items, setItems] = useLocalStorage('wardrobe_items', []);
-            const [outfits, setOutfits] = useLocalStorage('wardrobe_outfits', []);
-            const [locationNames, setLocationNames] = useLocalStorage('wardrobe_settings', { taipei: '台北家', kaohsiung: '高雄家' });
+            // 資料狀態 (改用 IndexedDB 進行大容量儲存)
+            const [items, setItems] = useState([]);
+            const [outfits, setOutfits] = useState([]);
+            const [locationNames, setLocationNames] = useState({ taipei: '台北家', kaohsiung: '高雄家' });
             
             const [currentLocation, setCurrentLocation] = useState('taipei');
             const [viewMode, setViewMode] = useState('wardrobe');
             const [filterCategory, setFilterCategory] = useState('全部');
             const [loading, setLoading] = useState(true);
             const [saving, setSaving] = useState(false);
+            const [isInitialized, setIsInitialized] = useState(false);
             
             // UI 對話框狀態
             const [showAddModal, setShowAddModal] = useState(false);
@@ -145,11 +126,44 @@
             const [toast, setToast] = useState(null); 
             const [confirmDialog, setConfirmDialog] = useState(null); 
 
+            // --- 非同步讀取與儲存資料 (避免 5MB 容量限制) ---
             useEffect(() => {
-                // 模擬讀取載入延遲
-                const timer = setTimeout(() => setLoading(false), 600);
-                return () => clearTimeout(timer);
+                const initData = async () => {
+                    try {
+                        // 1. 嘗試從大容量 localForage 讀取，若沒有則嘗試抓取舊版 localStorage 的資料進行轉移
+                        let storedItems = await localforage.getItem('wardrobe_items');
+                        if (!storedItems && window.localStorage.getItem('wardrobe_items')) {
+                            storedItems = JSON.parse(window.localStorage.getItem('wardrobe_items'));
+                        }
+                        
+                        let storedOutfits = await localforage.getItem('wardrobe_outfits');
+                        if (!storedOutfits && window.localStorage.getItem('wardrobe_outfits')) {
+                            storedOutfits = JSON.parse(window.localStorage.getItem('wardrobe_outfits'));
+                        }
+                        
+                        let storedSettings = await localforage.getItem('wardrobe_settings');
+                        if (!storedSettings && window.localStorage.getItem('wardrobe_settings')) {
+                            storedSettings = JSON.parse(window.localStorage.getItem('wardrobe_settings'));
+                        }
+
+                        // 2. 設定狀態
+                        setItems(storedItems || []);
+                        setOutfits(storedOutfits || []);
+                        setLocationNames(storedSettings || { taipei: '台北家', kaohsiung: '高雄家' });
+                        setIsInitialized(true);
+                    } catch (error) {
+                        console.error('資料讀取失敗', error);
+                        setIsInitialized(true); // 即使失敗也要讓畫面可以操作
+                    }
+                    setTimeout(() => setLoading(false), 400); // 模擬載入動畫
+                };
+                initData();
             }, []);
+
+            // 3. 監聽任何衣物與設定變動，自動在背景儲存進 IndexedDB
+            useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_items', items); }, [items, isInitialized]);
+            useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_outfits', outfits); }, [outfits, isInitialized]);
+            useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_settings', locationNames); }, [locationNames, isInitialized]);
 
             const showToast = (message, type = 'success') => {
                 setToast({ message, type });
