@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙城手帳 - 單機版</title>
+    <title>雙城衣櫥 - 單機版</title>
 
+    <!-- 引入 React, Tailwind, Babel, Lucide Icons, localForage -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -21,7 +22,6 @@
         .safe-area-inset-top { padding-top: env(safe-area-inset-top); }
         .safe-area-inset-bottom { padding-bottom: env(safe-area-inset-bottom); }
         
-        /* 基礎動畫設定 */
         @keyframes fade-in-up {
             0% { opacity: 0; transform: translate(-50%, 10px); }
             100% { opacity: 1; transform: translate(-50%, 0); }
@@ -41,8 +41,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- Lucide Icon 封裝組件 ---
-        // 為了在單一 HTML 中模擬 lucide-react，我們建立一個動態渲染 SVG 的 Icon 元件
+        // 建立動態渲染 SVG 的 Icon 元件
         const Icon = ({ name, size = 24, className = '', strokeWidth = 2, color = 'currentColor' }) => {
             const svgRef = useRef(null);
             useEffect(() => {
@@ -61,7 +60,7 @@
             return <span ref={svgRef} className={`inline-flex items-center justify-center ${className}`} />;
         };
 
-        // 對應原本 lucide-react 的圖示名稱，修正為正確的 PascalCase 鍵值
+        // 綁定圖示名稱
         const Camera = (p) => <Icon name="Camera" {...p} />;
         const MapPin = (p) => <Icon name="MapPin" {...p} />;
         const Plus = (p) => <Icon name="Plus" {...p} />;
@@ -85,8 +84,8 @@
         const Paperclip = (p) => <Icon name="Paperclip" {...p} />;
         const Edit3 = (p) => <Icon name="Edit3" {...p} />;
         const MapIcon = (p) => <Icon name="Map" {...p} />;
+        const Share = (p) => <Icon name="Share" {...p} />;
 
-        // --- 常數設定 ---
         const THEME = {
             taipei: { bgColor: 'bg-[#f0f9ff]', cardColor: 'bg-white', accentColor: 'bg-[#bae6fd]', textColor: 'text-[#0369a1]', tapeColor: 'bg-[#7dd3fc]', borderColor: 'border-[#0c4a6e]', shadow: 'shadow-[4px_4px_0px_#bae6fd]' },
             kaohsiung: { bgColor: 'bg-[#fff7ed]', cardColor: 'bg-white', accentColor: 'bg-[#fed7aa]', textColor: 'text-[#c2410c]', tapeColor: 'bg-[#fdba74]', borderColor: 'border-[#7c2d12]', shadow: 'shadow-[4px_4px_0px_#fed7aa]' }
@@ -94,7 +93,6 @@
 
         const CATEGORIES = ['上衣', '褲子/裙子', '外套', '洋裝', '鞋包', '配件', '其他'];
 
-        // --- 輔助工具 ---
         const generatePlaceholderImage = (text, bgColor) => {
             const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 400; const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#fffdf5'; ctx.fillRect(0, 0, 400, 400);
@@ -105,10 +103,11 @@
         };
 
         function App() {
-            // 資料狀態 (改用 IndexedDB 進行大容量儲存)
+            // 資料狀態
             const [items, setItems] = useState([]);
             const [outfits, setOutfits] = useState([]);
-            const [locationNames, setLocationNames] = useState({ taipei: '台北家', kaohsiung: '高雄家' });
+            const DEFAULT_LOCATIONS = { taipei: '台北家', kaohsiung: '高雄家' };
+            const [locationNames, setLocationNames] = useState(DEFAULT_LOCATIONS);
             
             const [currentLocation, setCurrentLocation] = useState('taipei');
             const [viewMode, setViewMode] = useState('wardrobe');
@@ -126,12 +125,11 @@
             const [toast, setToast] = useState(null); 
             const [confirmDialog, setConfirmDialog] = useState(null); 
 
-            // --- 非同步讀取與儲存資料 (避免 5MB 容量限制) ---
             useEffect(() => {
                 const initData = async () => {
                     try {
-                        // 1. 嘗試從大容量 localForage 讀取，若沒有則嘗試抓取舊版 localStorage 的資料進行轉移
                         let storedItems = await localforage.getItem('wardrobe_items');
+                        // 無縫轉移 localStorage 舊資料
                         if (!storedItems && window.localStorage.getItem('wardrobe_items')) {
                             storedItems = JSON.parse(window.localStorage.getItem('wardrobe_items'));
                         }
@@ -146,21 +144,20 @@
                             storedSettings = JSON.parse(window.localStorage.getItem('wardrobe_settings'));
                         }
 
-                        // 2. 設定狀態
-                        setItems(storedItems || []);
-                        setOutfits(storedOutfits || []);
-                        setLocationNames(storedSettings || { taipei: '台北家', kaohsiung: '高雄家' });
+                        if (storedItems) setItems(storedItems);
+                        if (storedOutfits) setOutfits(storedOutfits);
+                        if (storedSettings) setLocationNames({ ...DEFAULT_LOCATIONS, ...storedSettings });
+                        
                         setIsInitialized(true);
                     } catch (error) {
                         console.error('資料讀取失敗', error);
-                        setIsInitialized(true); // 即使失敗也要讓畫面可以操作
+                        setIsInitialized(true); 
                     }
-                    setTimeout(() => setLoading(false), 400); // 模擬載入動畫
+                    setTimeout(() => setLoading(false), 400);
                 };
                 initData();
             }, []);
 
-            // 3. 監聽任何衣物與設定變動，自動在背景儲存進 IndexedDB
             useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_items', items); }, [items, isInitialized]);
             useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_outfits', outfits); }, [outfits, isInitialized]);
             useEffect(() => { if (isInitialized) localforage.setItem('wardrobe_settings', locationNames); }, [locationNames, isInitialized]);
@@ -170,7 +167,6 @@
                 setTimeout(() => setToast(null), 3000);
             };
 
-            // --- 資料操作方法 (替換掉 Firebase 邏輯) ---
             const addNewItem = async (newItem) => {
                 setSaving(true);
                 setTimeout(() => {
@@ -179,7 +175,7 @@
                     setShowAddModal(false); 
                     showToast('貼上貼紙了！'); 
                     setSaving(false);
-                }, 400); // 模擬處理時間
+                }, 400); 
             };
 
             const updateItem = async (updatedItem) => {
@@ -247,21 +243,22 @@
             const handButton = `${currentTheme.accentColor} ${currentTheme.textColor} font-bold px-4 py-2 rounded-[255px_15px_225px_15px/15px_225px_15px_255px] border-2 border-transparent hover:border-stone-400 transition-all active:scale-95 shadow-sm`;
             const washiTape = `absolute -top-3 left-1/2 transform -translate-x-1/2 w-16 h-6 ${currentTheme.tapeColor} opacity-80 rotate-[-2deg] z-10`;
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#fffdf5] text-stone-400 font-medium tracking-widest"><Loader2 className="animate-spin mr-2" /> 準備手帳中...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#fffdf5] text-stone-400 font-medium tracking-widest"><Loader2 className="animate-spin mr-2" /> 準備衣櫥中...</div>;
 
             return (
                 <div className={`min-h-screen font-sans text-stone-600 transition-colors duration-500 pb-32 relative ${currentTheme.bgColor}`}>
                     <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#a8a29e 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}></div>
                     
                     <div className="relative z-10 flex flex-col min-h-screen">
-                        {/* Navbar */}
+                        
+                        {/* Header Navbar */}
                         <div className="bg-white/90 backdrop-blur-sm border-b-2 border-stone-100 border-dashed sticky top-0 safe-area-inset-top z-20 shadow-sm">
                             <div className="max-w-md mx-auto px-4 py-3">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center space-x-3">
                                         <div className={`p-2 rounded-[30%_70%_70%_30%/30%_30%_70%_70%] ${currentTheme.accentColor} border-2 border-stone-200 shadow-sm`}> <Home size={22} className={currentTheme.textColor} strokeWidth={2.5} /> </div>
                                         <div>
-                                            <h1 className="text-xl font-bold tracking-tight text-stone-700 flex items-center">雙城手帳</h1>
+                                            <h1 className="text-xl font-bold tracking-tight text-stone-700 flex items-center">雙城衣櫥</h1>
                                             <div className="flex items-center text-xs font-medium text-stone-400 mt-0.5">
                                                 <MapPin size={10} className="mr-1" />
                                                 <span>{currentTheme.name}</span>
@@ -279,16 +276,17 @@
                                         <button onClick={() => setShowSettingsModal(true)} className="p-2 bg-white rounded-full border border-stone-200 text-stone-400 hover:text-stone-600 shadow-sm"> <Settings size={20} strokeWidth={2} /> </button>
                                     </div>
                                 </div>
+                                
                                 {viewMode === 'wardrobe' && (
                                     <div className="flex flex-wrap gap-2 pb-2 px-1">
-                                        <button onClick={() => setFilterCategory('全部')} className={`px-4 py-1.5 text-xs font-bold transition-all rounded-[10px_5px_15px_5px] ${filterCategory === '全部' ? `${currentTheme.accentColor} ${currentTheme.textColor} border-2 border-transparent` : 'bg-white border-2 border-stone-100 text-stone-500'}`}>全部</button>
-                                        {CATEGORIES.map(cat => ( <button key={cat} onClick={() => setFilterCategory(cat)} className={`px-4 py-1.5 text-xs font-bold transition-all rounded-[10px_5px_15px_5px] ${filterCategory === cat ? `${currentTheme.accentColor} ${currentTheme.textColor} border-2 border-transparent` : 'bg-white border-2 border-stone-100 text-stone-500'}`}>{cat}</button> ))}
+                                        <button onClick={() => setFilterCategory('全部')} className={`flex-shrink-0 px-4 py-1.5 text-xs font-bold transition-all rounded-[10px_5px_15px_5px] ${filterCategory === '全部' ? `${currentTheme.accentColor} ${currentTheme.textColor} border-2 border-transparent` : 'bg-white border-2 border-stone-100 text-stone-500'}`}>全部</button>
+                                        {CATEGORIES.map(cat => ( <button key={cat} onClick={() => setFilterCategory(cat)} className={`flex-shrink-0 px-4 py-1.5 text-xs font-bold transition-all rounded-[10px_5px_15px_5px] ${filterCategory === cat ? `${currentTheme.accentColor} ${currentTheme.textColor} border-2 border-transparent` : 'bg-white border-2 border-stone-100 text-stone-500'}`}>{cat}</button> ))}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Content */}
+                        {/* Main Content Area */}
                         <main className="max-w-md mx-auto p-4 w-full flex-grow">
                             {viewMode === 'wardrobe' ? (
                                 filteredItems.length === 0 ? (
@@ -347,10 +345,12 @@
                         </main>
                     </div>
 
+                    {/* Floating Action Button */}
                     <div className="fixed bottom-24 right-6 z-40">
                          <button onClick={() => viewMode === 'wardrobe' ? setShowAddModal(true) : setShowOutfitModal(true)} className={`w-16 h-16 flex items-center justify-center rounded-full ${currentTheme.accentColor} border-4 border-white shadow-lg text-stone-700 transition-transform active:scale-95 hover:rotate-12`}> <Plus size={32} strokeWidth={3} /> </button>
                     </div>
 
+                    {/* Bottom Navigation */}
                     <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-stone-200 safe-area-inset-bottom z-30 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                         <div className="flex justify-around items-center h-full max-w-md mx-auto">
                             <button onClick={() => setViewMode('wardrobe')} className={`group w-1/2 h-full flex flex-col items-center justify-center transition-colors ${viewMode === 'wardrobe' ? 'bg-stone-50' : ''}`}>
@@ -362,7 +362,7 @@
                         </div>
                     </div>
 
-                    {/* 通知 Toast */}
+                    {/* Dialogs & Modals */}
                     {toast && (
                         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-white text-stone-600 border border-stone-200 px-6 py-3 shadow-lg rounded-full z-[100] animate-fade-in-up flex items-center font-bold">
                             {toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-red-400"/> : <Check size={18} className="mr-2 text-green-400"/>}
@@ -370,7 +370,6 @@
                         </div>
                     )}
 
-                    {/* 確認對話框 */}
                     {confirmDialog && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-900/20 backdrop-blur-sm p-6 animate-fade-in">
                             <div className="bg-[#fef9c3] w-full max-w-xs shadow-xl p-6 rotate-[-2deg] relative">
@@ -385,7 +384,6 @@
                         </div>
                     )}
 
-                    {/* 彈出視窗組件區 */}
                     {(showAddModal || editingItem) && (
                         <ItemFormModal 
                             key={editingItem ? editingItem.id : 'add-new'}
@@ -407,9 +405,9 @@
                     {showSettingsModal && (
                         <SettingsModal 
                             onClose={() => setShowSettingsModal(false)} 
-                            items={items} outfits={outfits} setItems={setItems} setOutfits={setOutfits}
+                            items={items} outfits={outfits} 
                             onShowHelp={() => { setShowSettingsModal(false); setShowHelpModal(true); }} 
-                            showToast={showToast} theme={currentTheme} handButton={handButton}
+                            showToast={showToast} theme={currentTheme} 
                             locationNames={locationNames} onSaveLocationNames={saveLocationNames} 
                         />
                     )}
@@ -419,34 +417,67 @@
             );
         }
 
-        function SettingsModal({ onClose, items, outfits, setItems, setOutfits, onShowHelp, showToast, theme, handButton, locationNames, onSaveLocationNames }) {
+        function SettingsModal({ onClose, items, outfits, onShowHelp, showToast, theme, locationNames, onSaveLocationNames }) {
             const [isProcessing, setIsProcessing] = useState(false);
             const [localNames, setLocalNames] = useState(locationNames); 
             const fileInputRef = useRef(null);
 
-            const handleExport = () => { setIsProcessing(true); try { const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), items, outfits, locationNames }); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); link.download = `wardrobe_backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); showToast('備份下載好囉'); } catch (e) { showToast('怪怪的...', 'error'); } finally { setIsProcessing(false); } };
-            
+            const handleExport = async () => { 
+                setIsProcessing(true); 
+                try { 
+                    // 先儲存新名稱確保匯出的資料與畫面一致
+                    onSaveLocationNames(localNames); 
+                    const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), items, outfits, locationNames: localNames }); 
+                    const link = document.createElement('a'); 
+                    link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); 
+                    link.download = `wardrobe_backup_${new Date().toISOString().slice(0, 10)}.json`; 
+                    document.body.appendChild(link); 
+                    link.click(); 
+                    document.body.removeChild(link); 
+                    showToast('備份下載好囉'); 
+                } catch (e) { 
+                    showToast('怪怪的...', 'error'); 
+                } finally { 
+                    setIsProcessing(false); 
+                } 
+            };
+
             const handleImport = async (e) => { 
-                const file = e.target.files[0]; if (!file) return; setIsProcessing(true); 
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                setIsProcessing(true); 
                 const reader = new FileReader(); 
                 reader.onload = async (event) => { 
                     try { 
                         const data = JSON.parse(event.target.result); 
                         if (!data.items) throw new Error(); 
-                        setItems(data.items);
-                        if (data.outfits) setOutfits(data.outfits);
+                        
+                        // 加上 await 等待 IndexedDB 寫入完成
+                        await localforage.setItem('wardrobe_items', data.items); 
+                        await localforage.setItem('wardrobe_outfits', data.outfits || []); 
+                        
+                        // 如果舊檔案沒有自訂地點，提供預設名稱防止畫面出錯
                         if (data.locationNames) {
-                            onSaveLocationNames(data.locationNames);
-                            setLocalNames(data.locationNames);
+                            await localforage.setItem('wardrobe_settings', data.locationNames); 
+                        } else {
+                            await localforage.setItem('wardrobe_settings', { taipei: '台北家', kaohsiung: '高雄家' }); 
                         }
-                        showToast('匯入完成！'); onClose(); 
-                    } catch (err) { showToast('格式不對喔', 'error'); } finally { setIsProcessing(false); } 
+                        
+                        showToast('匯入完成！請重新整理網頁'); 
+                        setTimeout(()=>window.location.reload(), 1500); 
+                    } catch (err) { 
+                        showToast('格式不對喔', 'error'); 
+                    } finally { 
+                        setIsProcessing(false); 
+                    } 
                 }; 
                 reader.readAsText(file); 
             };
 
             const handleSaveNames = () => {
-                if (!localNames.taipei.trim() || !localNames.kaohsiung.trim()) { showToast('名稱不能空白喔', 'error'); return; }
+                if (!localNames.taipei.trim() || !localNames.kaohsiung.trim()) {
+                    showToast('名稱不能空白喔', 'error'); return;
+                }
                 onSaveLocationNames(localNames);
             };
 
@@ -471,15 +502,15 @@
                                         <input type="text" maxLength={6} value={localNames.kaohsiung} onChange={(e) => setLocalNames({...localNames, kaohsiung: e.target.value})} className="flex-1 p-2 bg-white border-2 border-stone-200 rounded-lg outline-none focus:border-stone-400 font-bold text-stone-700 text-sm" />
                                     </div>
                                     <div className="pt-2 flex justify-end">
-                                         <button onClick={handleSaveNames} className={`px-4 py-1.5 rounded-full bg-stone-700 text-white font-bold text-xs shadow-md hover:bg-stone-800 active:scale-95 transition-all`}>儲存新名稱</button>
+                                        <button onClick={handleSaveNames} className={`px-4 py-1.5 rounded-full bg-stone-700 text-white font-bold text-xs shadow-md hover:bg-stone-800 active:scale-95 transition-all`}>儲存新名稱</button>
                                     </div>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 className="text-xs font-bold text-stone-400 mb-3 uppercase tracking-widest bg-white inline-block px-1">新手教學</h3>
+                                <h3 className="text-xs font-bold text-stone-400 mb-3 uppercase tracking-widest bg-white inline-block px-1">小提示</h3>
                                 <button onClick={onShowHelp} className={`w-full flex justify-between p-4 bg-white border-2 border-dashed border-stone-200 rounded-2xl hover:border-stone-400 transition-all group`}>
-                                    <span className="flex items-center text-sm font-bold text-stone-600"><HelpCircle size={18} className="mr-3 text-stone-400"/> 安裝到手機桌面</span>
+                                    <span className="flex items-center text-sm font-bold text-stone-600"><HelpCircle size={18} className="mr-3 text-stone-400"/> 新增到手機桌面</span>
                                     <span className="text-stone-300 group-hover:translate-x-1 transition-transform">→</span>
                                 </button>
                             </div>
@@ -513,12 +544,15 @@
                     <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl flex flex-col max-h-[85vh] h-[80vh] relative border-4 border-white">
                         <div className={`absolute top-0 left-0 right-0 h-4 ${theme.accentColor}`}></div>
                         <div className="p-6 pt-8 border-b border-dashed border-stone-200 flex justify-between items-center bg-stone-50 flex-shrink-0">
-                            <div><h2 className="text-xl font-bold text-stone-700">新搭配</h2><p className="text-xs text-stone-500 font-medium mt-1">地點：{locationName}</p></div>
+                            <div>
+                                <h2 className="text-xl font-bold text-stone-700">新搭配</h2>
+                                <p className="text-base text-stone-600 font-bold mt-1.5 bg-stone-200/50 inline-block px-2 py-0.5 rounded-md">地點：{locationName}</p>
+                            </div>
                             <button onClick={onClose} className="p-2 bg-white rounded-full border border-stone-200 text-stone-400 hover:text-stone-600 shadow-sm"><X size={20} /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 bg-white" style={{ backgroundImage: 'linear-gradient(#f5f5f4 1px, transparent 1px)', backgroundSize: '100% 32px' }}>
                             <div className="mb-6">
-                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-widest mb-2 bg-white inline-block px-1">名稱</label>
+                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-widest mb-2 bg-white inline-block px-1">活動名稱</label>
                                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：週末野餐..." className="w-full p-4 border-2 border-stone-200 rounded-xl bg-white focus:border-stone-400 focus:ring-0 outline-none transition-all font-bold text-stone-700 placeholder-stone-300"/>
                             </div>
                             <label className="block text-xs font-bold text-stone-400 uppercase tracking-widest mb-3 bg-white inline-block px-1">選擇單品 ({selectedIds.length})</label>
@@ -640,16 +674,19 @@
                         <div className={`absolute top-0 left-0 right-0 h-4 ${theme.accentColor}`}></div> 
                         <div className="text-center mb-6 mt-4"> 
                             <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-stone-100 text-stone-500 border-2 border-dashed border-stone-200`}><Paperclip size={32} strokeWidth={2}/></div> 
-                            <h2 className="text-xl font-bold text-stone-700">釘選到桌面</h2> 
+                            <h2 className="text-xl font-bold text-stone-700">新增到手機桌面</h2> 
                         </div> 
-                        <p className="text-stone-500 mb-8 text-center leading-relaxed font-medium">想要更方便紀錄嗎？<br/>用瀏覽器的 <span className="bg-stone-100 px-1 py-0.5 rounded text-stone-700 font-bold border border-stone-200">分享</span> 功能<br/>選 <span className="bg-stone-100 px-1 py-0.5 rounded text-stone-700 font-bold border border-stone-200">加入主畫面</span> 就可以囉！</p> 
+                        <p className="text-stone-500 mb-8 text-center leading-relaxed font-medium">
+                            想在手機主畫面快速開啟嗎！<br/>
+                            點瀏覽器分享 <span className="inline-flex align-text-bottom"><Share size={18} className="text-stone-500 mx-1"/></span><br/>
+                            選擇 <span className="bg-stone-100 px-1 py-0.5 rounded text-stone-700 font-bold border border-stone-200">加入主畫面</span> 就可以囉！
+                        </p> 
                         <button onClick={onClose} className={`w-full py-3 rounded-xl font-bold text-white shadow-md active:scale-95 transition-all bg-stone-700`}>好喔</button>
                     </div>
                 </div>
             ); 
         }
 
-        // --- 啟動 React ---
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
